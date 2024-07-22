@@ -2,5 +2,68 @@
 title: "Two Parameters"
 author: "Sophia Yao"
 format: html
+execute: 
+  echo: false
 ---
 
+```{r}
+#| message: FALSE
+library(tidyverse)
+library(primer.data)
+library(tidybayes)
+library(brms)
+library(gtsummary)
+```
+
+```{r}
+nhanes |>
+  filter(sex == "Male", age >= 18) |>
+  select(height) |>
+  drop_na() |>
+  ggplot(aes(x = height)) + 
+  geom_histogram(bins = 50) + 
+  labs(title = "Male Adult Height in the US in 2010",
+      x = "Height (cm)",
+      y = "Count",
+      caption = "Source: National Health and Nutrition Examination Survey")
+```
+
+The NHANES dataset from the National Health and Nutrition Examination Survey conducted from 2009 to 2011 by the Centers for Disease Control and Prevention includes 15 variables, including physical attributes like weight and height. We are trying to find out what is the average height of an adult man and create a model. Because the survey was voluntary, perhaps people that were less insecure about their height and physical attributes responded. We used the brms package in R for model fitting and summary. One quantity of interest (QoI) in our analysis is the probability that the next man we meet will be taller than 180 centimeters. By using our fitted model, we calculated this probability and provided a measure of uncertainty around it, reflecting the inherent variability and limitations of our model. The average height of adult men in America in 2024 is 176 cm, with standard deviation of 7.48 cm.
+
+```{r}
+#| cache: TRUE
+brm(formula = height ~ 1, 
+    data = ch5, 
+    family = gaussian(), 
+    silent = 2, 
+    refresh = 0, 
+    seed = 12)
+```
+
+```{r}
+tbl_regression(fit_male_height, intercept = TRUE)
+```
+
+```{r}
+#| label: plot
+
+ndata <- tibble(.rows = 1)
+fit_male_height |>
+  add_predicted_draws(newdata = ndata) |>
+  ggplot(aes(x = .prediction)) +
+  geom_histogram(aes(y = after_stat(count / sum(count))), 
+                bins = 100) +
+  labs(title = "Posterior for Height of a Random Male",
+      subtitle = "Uncertainty for a single individual is much greater than the expected value",
+      x = "Height (cm)",
+      y = "Probability") + 
+      scale_x_continuous(labels = scales::number_format()) + 
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+```
+
+```{r}
+fit_male_height |>
+  add_predicted_draws(newdata = ndata |>
+  mutate(tall = if_else(.prediction > 180, TRUE, FALSE)) |>
+  summarize(odds = mean(tall))
+```
